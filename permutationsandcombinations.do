@@ -62,11 +62,11 @@ program combinations , rclass
 end 
 
 
-permutations , n(6) k(4)
-mat li r(permutations)
-
-combinations , n(6) k(4)
-mat li r(combinations)
+//permutations , n(6) k(4)
+//mat li r(permutations)
+//
+//combinations , n(6) k(4)
+//mat li r(combinations)
 
 
 
