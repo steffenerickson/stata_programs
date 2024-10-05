@@ -25,11 +25,9 @@ input x111 x112 x121 x122 x131 x132 x211 x212 x221 x222 x231 x232
 4 1 2 2 2 1 1 1 2 2 2 2 1
 end 
 gen p = _n 
-ds x*
-stubs_for_reshape `r(varlist)' , s(1) e(3)
+stubs_for_reshape x* , s(1) e(3)
 reshape long `r(stubs)' , i(p) j(r)
-ds x*
-stubs_for_reshape `r(varlist)' , s(1) e(2)
+stubs_for_reshape x* , s(1) e(2)
 reshape long `r(stubs)' , i(p r) j(t)
 
 // Method
