@@ -60,5 +60,3 @@ void output_record(struct myproblem scalar pr)
 end 
 
 
-
-
