@@ -40,6 +40,14 @@ struct derived {
     string matrix  upsilon_y_bag    // Intercepts for endogenous indicators
     string matrix  upsilon_xa_bag   // Intercepts for anchored exogenous indicators
     string matrix  upsilon_xna_bag  // Intercepts for non-anchored exogenous indicators
+	string matrix  Beta1
+	string matrix  Beta2
+	string matrix  Gamma1
+	string matrix  Gamma2
+	string matrix  Lambday1
+	string matrix  Lambday2
+	string matrix  Lambdaxna1
+	string matrix  Lambdaxna2
 }
 
 // Initialize the derived structure with empty matrices and a new anchorkey asarray
@@ -55,7 +63,15 @@ void initialize_objects(struct derived scalar d)
     d.lambday_bag  = J(0,0,"") 
     d.upsilon_y_bag = J(0,0,"") 
     d.upsilon_xa_bag = J(0,0,"") 
-    d.upsilon_xna_bag = J(0,0,"") 	
+    d.upsilon_xna_bag = J(0,0,"") 
+	d.Beta1 = J(0,0,"") 
+	d.Beta2 = J(0,0,"") 
+	d.Gamma1 = J(0,0,"") 
+	d.Gamma2 = J(0,0,"") 
+	d.Lambday1 = J(0,0,"") 
+	d.Lambday2 = J(0,0,"") 
+	d.Lambdaxna1 = J(0,0,"") 
+	d.Lambdaxna2 = J(0,0,"") 
 }
 
 // Main entry point: initialize and run the routines to process SEM results
@@ -78,8 +94,11 @@ struct derived main(lxvars,lyvars,oyvars,params,glvls,cmdline,comparegroups)
     get_anchorkey(pr)
     group_pathcoefs(pr)
     group_intercepts(pr)
+	get_Beta(pr)
+	get_Gamma(pr)
+	get_Lambday(pr)
+	get_Lambdaxna(pr)
     // Additional steps (e.g., build_matrices/equations(), standard errors) could follow
-    
     return(pr.d)
 }
 
@@ -245,232 +264,90 @@ void group_intercepts(struct myproblem scalar pr)
     s3 = rowmissing(editvalue(indexnot(check3, pr.d.intercepts[1...,1]),0,.)) 
     pr.d.upsilon_xna_bag  = select(pr.d.intercepts,s3)
 }
+void get_Beta(struct myproblem scalar pr) 
+{
+	real matrix B 
+	real scalar i,j,k
+	
+	pr.d.Beta1 = J(length(pr.lyvars),length(pr.lyvars),"")
+	pr.d.Beta2 = J(length(pr.lyvars),length(pr.lyvars),"")
+	for(i=1;i<=rows(pr.d.Beta1);i++) {
+		for(j=1;j<=cols(pr.d.Beta1);j++) {
+			if (pr.lyvars[i] != pr.lyvars[j]) {
+				for(k=1;k<=rows(pr.d.beta_bag);k++) {
+					B = strpos(pr.d.beta_bag[k,1],(pr.lyvars[i],pr.lyvars[j]))
+					if (rowmissing(editvalue(B,0,.)) == 0 & B[1] < B[2]) {
+						pr.d.Beta1[i,j] = "_b[" + pr.d.beta_bag[k,1] + "]"
+						pr.d.Beta2[i,j] = "_b[" + pr.d.beta_bag[k,2] + "]"
+					}
+				}
+			}
+		}	
+	}
+}
+void get_Gamma(struct myproblem scalar pr) 
+{
+	real matrix B 
+	real scalar i,j,k
+	
+	pr.d.Gamma1 = J(length(pr.lyvars),length(pr.lxvars),"")
+	pr.d.Gamma2 = J(length(pr.lyvars),length(pr.lxvars),"")
+	for(i=1;i<=rows(pr.d.Gamma1);i++) {
+		for(j=1;j<=cols(pr.d.Gamma1);j++) {
+			for(k=1;k<=rows(pr.d.gamma_bag);k++) {
+				B = strpos(pr.d.gamma_bag[k,1],(pr.lyvars[i],pr.lxvars[j]))
+				if (rowmissing(editvalue(B,0,.)) == 0 & B[1] < B[2]) {
+					pr.d.Gamma1[i,j] = "_b[" + pr.d.gamma_bag[k,1] + "]"
+					pr.d.Gamma2[i,j] = "_b[" + pr.d.gamma_bag[k,2] + "]"
+				}
+			}
+		}	
+	}
+}
+void get_Lambday(struct myproblem scalar pr) 
+{
+	real matrix   B, pos
+	real scalar   i,j,k
+	string matrix yobserved 
+	
+	pr.d.Lambday1 = J(rows(pr.d.lambday_bag),length(pr.lyvars),"")
+	pr.d.Lambday2 = J(rows(pr.d.lambday_bag),length(pr.lyvars),"")
+	pos = strpos(pr.d.lambday_bag[1...,1],":"):-1
+	yobserved = substr(pr.d.lambday_bag[1...,1],J(rows(pos),1,1),pos)
+	for(i=1;i<=rows(pr.d.Lambday1);i++) {
+		for(j=1;j<=cols(pr.d.Lambday1);j++) {
+			for(k=1;k<=rows(pr.d.lambday_bag);k++) {
+				B = strpos(pr.d.lambday_bag[k,1],(yobserved[i],pr.lyvars[j]))
+				if (rowmissing(editvalue(B,0,.)) == 0 & B[1] < B[2]) {
+					pr.d.Lambday1[i,j] = "_b[" + pr.d.lambday_bag[k,1] + "]"
+					pr.d.Lambday2[i,j] = "_b[" + pr.d.lambday_bag[k,2] + "]"
+				}
+			}
+		}	
+	}
+}
 
+void get_Lambdaxna(struct myproblem scalar pr) 
+{
+	real matrix   B, pos
+	real scalar   i,j,k
+	string matrix xobserved 
+	
+	pr.d.Lambdaxna1 = J(rows(pr.d.lambdax_na_bag),length(pr.lxvars),"")
+	pr.d.Lambdaxna2 = J(rows(pr.d.lambdax_na_bag),length(pr.lxvars),"")
+	pos = strpos(pr.d.lambdax_na_bag[1...,1],":"):-1
+	xobserved = substr(pr.d.lambdax_na_bag[1...,1],J(rows(pos),1,1),pos)
+	for(i=1;i<=rows(pr.d.Lambdaxna1);i++) {
+		for(j=1;j<=cols(pr.d.Lambdaxna1);j++) {
+			for(k=1;k<=rows(pr.d.lambdax_na_bag);k++) {
+				B = strpos(pr.d.lambdax_na_bag[k,1],(xobserved[i],pr.lxvars[j]))
+				if (rowmissing(editvalue(B,0,.)) == 0 & B[1] < B[2]) {
+					pr.d.Lambdaxna1[i,j] = "_b[" + pr.d.lambdax_na_bag[k,1] + "]"
+					pr.d.Lambdaxna2[i,j] = "_b[" + pr.d.lambdax_na_bag[k,2] + "]"
+				}
+			}
+		}	
+	}
+}
 end
 
-
-
-
-/*
-mata mata clear
-// compute model intervention effects 
-cap prog drop levelsforsem 
-prog levelsforsem, rclass  
-	syntax varlist(max=1), Local(string)
-	qui levelsof `varlist', local(temp)
-	forvalues i = 1/`:word count `temp'' {
-		local lvl = `:word `i' of `temp''
-		if (`i' == 1) local new `lvl'bn.`varlist'
-		else          local new `lvl'.`varlist'
-		local `local' : list `local' | new 
-	}
-	return local `local'  ``local''
-end
-
-mata 
-struct myproblem  {
-	string vector	lxvars 
-	string vector	lyvars 
-	string vector	oxvars   
-	string vector	oyvars  
-	string vector	params
-	string vector	glvls
-	string scalar 	cmdline   
-	real vector 	comparegroups
-	struct derived 	scalar d
-}
-
-struct derived { 
-	string matrix  pathcoefs  
-	string matrix  intercepts   
-	transmorphic   anchorkey
-	string matrix  beta_bag  
-	string matrix  gamma_bag 
-	string matrix  lambdax_a_bag 
-	string matrix  lambdax_na_bag 
-	string matrix  lambday_bag  
-    string matrix  upsilon_y_bag
-	string matrix  upsilon_xa_bag
-    string matrix  upsilon_xna_bag
-
-}
-
-void initialize_objects(struct derived scalar d)
-{
-	d.pathcoefs = J(0,0,"") 
-	d.intercepts = J(0,0,"") 
-	d.anchorkey  = asarray_create() 
-	d.beta_bag  = J(0,0,"") 
-	d.gamma_bag = J(0,0,"") 
-	d.lambdax_a_bag = J(0,0,"") 
-	d.lambdax_na_bag = J(0,0,"") 
-	d.lambday_bag  = J(0,0,"") 
-	d.upsilon_y_bag = J(0,0,"") 
-	d.upsilon_xa_bag = J(0,0,"") 
-	d.upsilon_xna_bag = J(0,0,"") 	
-}
-
-struct derived main(lxvars,lyvars,oyvars,params,glvls,cmdline,comparegroups)
-{
-	struct myproblem scalar pr
-	initialize_objects(pr.d)
-	
-	pr.lxvars  = lxvars
-	pr.lyvars  = lyvars
-	pr.oyvars  = oyvars
-	pr.params  = params
-	pr.glvls   = glvls 
-	pr.cmdline = cmdline 
-	pr.comparegroups = comparegroups 
-
-	get_coefficients(pr)
-	get_anchorkey(pr)
-	group_pathcoefs(pr)
-	group_intercepts(pr)
-	// build_matrices/equations()
-	// Standard errors 
-	return(pr.d)
-}
-
-void get_coefficients(struct myproblem scalar pr)
-{
-	real   matrix 	s1, s2a,s2b,s3,s4a,s4b,hold1,hold2
-	real scalar i 
-	string matrix 	params2,params3,params4
-	
-	// remove means,variances, and errors 
-	s1 = rowsum(strpos(pr.params,("var","mean","cov")))
-	s1 = mm_cond(s1:>0,s1:-s1,s1:+1)
-	params2 = select(pr.params, s1)
-	
-	// seperate coefficients by group
-	s2a  = strpos(params2,pr.glvls[pr.comparegroups[1]]) 
-	s2b  = strpos(params2,pr.glvls[pr.comparegroups[2]]) 
-	params3 = select(params2, s2a), select(params2, s2b)
-	
-	// remove pesky endogenous intercepts
-	hold1 = J(rows(params3),length(pr.lyvars),.)
-	for (i=1;i<=length(pr.lyvars);i++) hold1[1...,i] = rowsum(strpos(params3,pr.lyvars[i]))
-	hold1 = rowsum(hold1)
-	hold2 = rowsum(strpos(params3,"#"))
-	s3 = J(rows(params3),1,0)
-	for (i=1;i<=length(s3);i++) if (hold1[i] > 0 & hold2[i] == 0) s3[i] = 1
-	s3 = mm_cond(s3:>0,s3:-s3,s3:+1)
-	params4 = select(params3, s3)
-	
-	// seperate the interecepts and path coefficients
-	s4a = rowsum(strpos(params4,"#"))
-	s4b = mm_cond(s4a:>0,s4a:-s4a,s4a:+1)
-	pr.d.pathcoefs  = select(params4, s4a)
-	pr.d.intercepts = select(params4, s4b)
-}
-
-void get_anchorkey(struct myproblem scalar pr)
-{
-	real  matrix  s1,s2
-	real scalar pos,i,j
-	string scalar cmdline2,matched, anchor, latentvar 
-	string matrix equations,equations2,equations3,check1,check2 
-	
-	cmdline2 = substr(pr.cmdline,strpos(pr.cmdline,"("),strpos(pr.cmdline,",")-strpos(pr.cmdline,"("))
-	equations = ustrsplit(cmdline2, "\)\s*\(")'
-	equations = subinstr(subinstr(equations,"(",""),")","")
-	check1 = J(rows(equations),1,pr.oyvars)
-	s1 = rowmax(indexnot(check1, equations)):== rowmin(indexnot(check1, equations)) // Ify about this 
-	s1 = mm_cond(s1:>0,s1:-s1,s1:+1)
-	equations2 = select(equations, s1)
-	check2 = J(rows(equations2),1,pr.lxvars)
-	s2 = rowmax(indexnot(check2, equations2)):== rowmin(indexnot(check2, equations2)) // Ify about this 
-	equations3 = select(equations2, s2)
-	// Need to build in routine for higher order models 
-	for(i=1;i<=rows(equations3);i++) {
-		if (regexm(equations3[i], "([A-Za-z0-9]+@1)")) {
-			matched = regexs(1)
-			pos = strpos(matched,"@") - 1 
-			anchor = substr(matched,1,pos)
-		}
-		for (j=1;j<=length(pr.lxvars);j++) {
-			if (strpos(equations3[i], pr.lxvars[j]) > 0) {
-				latentvar  = pr.lxvars[j]
-				asarray(pr.d.anchorkey,latentvar,anchor)
-				break
-			}	
-		}		
-	}
-}
-
-void group_pathcoefs(struct myproblem scalar pr)
-{
-	real matrix res,a,s1,s1a,s1b,s2,s2a,s2b,s2c,s2d
-	real scalar i 
-	string matrix check1,structcoefs,loadings,lambdax_bag
-
-	// ---------- Find structural Coefficients 
-	check1 = J(rows(pr.d.pathcoefs),1,pr.oyvars)
-	s1 = rowmissing(editvalue(indexnot(check1, pr.d.pathcoefs[1...,1]),0,.))
-	s1 = mm_cond(s1:>0,s1:-s1,s1:+1)
-	structcoefs = select(pr.d.pathcoefs,s1)
-	res = J(rows(structcoefs),length(pr.lyvars),.)
-	for (i=1;i<=length(pr.lyvars);i++) {
-		a = strpos(structcoefs[1...,1],pr.lyvars[i]) 
-		res[1...,i] = mm_cond(a:>1,a:-a:+ 1,a:-a)
-	}
-	s1a = rowsum(res)
-	
-	// Beta Coefficients 
-	pr.d.beta_bag = select(structcoefs,s1a)
-	// Gamma Coefficients 
-	s1b = mm_cond(s1a:>0,s1a:-s1a,s1a:+1)
-	pr.d.gamma_bag = select(structcoefs,s1b)
-	
-	// -------------- Find Loadings 
-	s2 = mm_cond(s1:>0,s1:-s1,s1:+1)
-	loadings = select(pr.d.pathcoefs,s2)
-	res = J(rows(loadings),length(pr.lyvars),.)
-	for (i=1;i<=length(pr.lyvars);i++) {
-		a = strpos(loadings[1...,1],pr.lyvars[i]) 
-		res[1...,i] = mm_cond(a:>1,a:-a:+ 1,a:-a)
-	}
-	s2a = rowsum(res)
-	// Find endogenous loadings
-	pr.d.lambday_bag = select(loadings,s2a)
-	
-	// Find exogenous loadings
-	s2b = mm_cond(s2a:>0,s2a:-s2a,s2a:+1)
-	lambdax_bag = select(loadings,s2b)
-	res = J(rows(lambdax_bag),length(pr.lxvars),.)
-	for (i=1;i<=length(pr.lxvars);i++) {
-		res[1...,i] = strpos(lambdax_bag[1...,1],asarray(pr.d.anchorkey,pr.lxvars[i])) 
-	}
-	s2c = rowsum(res)
-	pr.d.lambdax_a_bag = select(lambdax_bag,s2c)
-	s2d = mm_cond(s2c:>0,s2c:-s2c,s2c:+1)
-	pr.d.lambdax_na_bag = select(lambdax_bag,s2d)
-}
-
-void group_intercepts(struct myproblem scalar pr)
-{
-	real matrix pos1,pos2,pos3,s1,s2,s3
-	string matrix check1,check2,check3,ys,xas,xnas
-	
-	pos1 = strpos(pr.d.lambday_bag[1...,1],":")
-	ys = substr(pr.d.lambday_bag[1...,1],J(rows(pr.d.lambday_bag),1,1),pos1:-1) 
-	check1 = J(rows(pr.d.intercepts),1,ys')
-	s1 = rowmissing(editvalue(indexnot(check1, pr.d.intercepts[1...,1]),0,.)) // Ify about this 
-	pr.d.upsilon_y_bag = select(pr.d.intercepts,s1)
-	
-	pos2 = strpos(pr.d.lambdax_a_bag[1...,1],":")
-	xas = substr(pr.d.lambdax_a_bag[1...,1],J(rows(pr.d.lambdax_a_bag),1,1),pos2:-1) 
-	check2 = J(rows(pr.d.intercepts),1,xas')
-	s2 = rowmissing(editvalue(indexnot(check2, pr.d.intercepts[1...,1]),0,.)) // Ify about this 
-	pr.d.upsilon_xa_bag  = select(pr.d.intercepts,s2)
-	
-	pos3 = strpos(pr.d.lambdax_na_bag[1...,1],":")
-	xnas = substr(pr.d.lambdax_na_bag[1...,1],J(rows(pr.d.lambdax_na_bag),1,1),pos3:-1) 
-	check3 = J(rows(pr.d.intercepts),1,xnas')
-	s3 = rowmissing(editvalue(indexnot(check3, pr.d.intercepts[1...,1]),0,.)) // Ify about this 
-	pr.d.upsilon_xna_bag  = select(pr.d.intercepts,s3)
-}
-
-end 
-*/
