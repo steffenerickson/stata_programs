@@ -124,7 +124,7 @@ void initialize_objects(struct derived scalar d)
 	d.Lambday2 = J(0,0,"") 
 	d.Lambdaxna1 = J(0,0,"") 
 	d.Lambdaxna2 = J(0,0,"") 
-		d.parammatrices_real = asarray_create()	
+	d.parammatrices_real = asarray_create()	
 	d.Beta1_real = J(0,0,"")
 	d.Beta2_real = J(0,0,"")
 	d.Gamma1_real = J(0,0,"")
@@ -459,7 +459,224 @@ void fill_matrices(struct myproblem scalar pr)
 		}
 		
 		asarray(pr.d.parammatrices_real,key,result)
+		
 	}
 }
 end
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+Python code to write equations
+
+from sympy import Symbol, Matrix, eye, simplify
+
+# Define symbolic variables for matrix entries using Symbol (not symbols)
+x2_F2 = Symbol("_b[x2:0bn.t#c.F2]")
+x3_F3 = Symbol("_b[x3:0bn.t#c.F3]")
+F2_F1 = Symbol("_b[F2:0bn.t#c.F1]")
+F3_F2 = Symbol("_b[F3:0bn.t#c.F2]")
+
+# Define Lambda_y as a symmetric matrix
+Lambda_y = Matrix([
+    [x2_F2, 0],
+    [0, x3_F3]
+])
+
+# Define Gamma1 as a column vector
+Gamma1 = Matrix([
+    [F2_F1],
+    [0]
+])
+
+# Define Beta1 matrix
+Beta1 = Matrix([
+    [0, 0],
+    [F3_F2, 0]
+])
+
+# Create identity matrix (I)
+I = eye(2)
+
+try:
+    # Perform the operation: Lambda_y * (I - Beta1)^(-1) * Gamma1
+    result = Lambda_y * (I - Beta1).inv() * Gamma1
+    result = simplify(result)
+
+    print("Result of Lambda_y * (I - Beta1)^-1 * Gamma1:")
+    print(result)
+
+except Exception as e:
+    print(f"An error occurred: {e}")
+
+
+	
+from sympy import Symbol, Matrix, eye, simplify
+
+# Define symbolic variables for Lambda_y entries (non-zero entries)
+s1_r01_l02_s1 = Symbol("_b[s1_r01_l02:0bn.t#c.S1]")
+s1_r02_l01_s1 = Symbol("_b[s1_r02_l01:0bn.t#c.S1]")
+s1_r02_l02_s1 = Symbol("_b[s1_r02_l02:0bn.t#c.S1]")
+
+s2_r01_l01_s2 = Symbol("_b[s2_r01_l01:0bn.t#c.S2]")
+s2_r01_l02_s2 = Symbol("_b[s2_r01_l02:0bn.t#c.S2]")
+s2_r02_l01_s2 = Symbol("_b[s2_r02_l01:0bn.t#c.S2]")
+s2_r02_l02_s2 = Symbol("_b[s2_r02_l02:0bn.t#c.S2]")
+
+s3_r01_l01_s3 = Symbol("_b[s3_r01_l01:0bn.t#c.S3]")
+s3_r01_l02_s3 = Symbol("_b[s3_r01_l02:0bn.t#c.S3]")
+s3_r02_l01_s3 = Symbol("_b[s3_r02_l01:0bn.t#c.S3]")
+s3_r02_l02_s3 = Symbol("_b[s3_r02_l02:0bn.t#c.S3]")
+
+s4_r01_l01_s4 = Symbol("_b[s4_r01_l01:0bn.t#c.S4]")
+s4_r01_l02_s4 = Symbol("_b[s4_r01_l02:0bn.t#c.S4]")
+s4_r02_l01_s4 = Symbol("_b[s4_r02_l01:0bn.t#c.S4]")
+s4_r02_l02_s4 = Symbol("_b[s4_r02_l02:0bn.t#c.S4]")
+
+s5_r01_l01_s5 = Symbol("_b[s5_r01_l01:0bn.t#c.S5]")
+s5_r01_l02_s5 = Symbol("_b[s5_r01_l02:0bn.t#c.S5]")
+s5_r02_l01_s5 = Symbol("_b[s5_r02_l01:0bn.t#c.S5]")
+s5_r02_l02_s5 = Symbol("_b[s5_r02_l02:0bn.t#c.S5]")
+
+s6_r01_l01_s6 = Symbol("_b[s6_r01_l01:0bn.t#c.S6]")
+s6_r01_l02_s6 = Symbol("_b[s6_r01_l02:0bn.t#c.S6]")
+s6_r02_l01_s6 = Symbol("_b[s6_r02_l01:0bn.t#c.S6]")
+s6_r02_l02_s6 = Symbol("_b[s6_r02_l02:0bn.t#c.S6]")
+
+# Define Gamma1 entries
+S1_F1 = Symbol("_b[S1:0bn.t#c.F1]")
+S2_F1 = Symbol("_b[S2:0bn.t#c.F1]")
+S3_F1 = Symbol("_b[S3:0bn.t#c.F1]")
+F2_F1 = Symbol("_b[F2:0bn.t#c.F1]")
+
+# Define Beta1 entries
+S4_F2 = Symbol("_b[S4:0bn.t#c.F2]")
+S5_F2 = Symbol("_b[S5:0bn.t#c.F2]")
+S6_F2 = Symbol("_b[S6:0bn.t#c.F2]")
+
+# Construct Lambda_y (23 x 7)
+# Rows are indexed from 1 to 23 and columns from 1 to 7 as shown in the given matrix
+Lambda_y_data = [
+ [s1_r01_l02_s1,              0,              0,              0,              0,              0, 0],
+ [s1_r02_l01_s1,              0,              0,              0,              0,              0, 0],
+ [s1_r02_l02_s1,              0,              0,              0,              0,              0, 0],
+ [0,              s2_r01_l01_s2,              0,              0,              0,              0, 0],
+ [0,              s2_r01_l02_s2,              0,              0,              0,              0, 0],
+ [0,              s2_r02_l01_s2,              0,              0,              0,              0, 0],
+ [0,              s2_r02_l02_s2,              0,              0,              0,              0, 0],
+ [0,                           0, s3_r01_l01_s3,              0,              0,              0, 0],
+ [0,                           0, s3_r01_l02_s3,              0,              0,              0, 0],
+ [0,                           0, s3_r02_l01_s3,              0,              0,              0, 0],
+ [0,                           0, s3_r02_l02_s3,              0,              0,              0, 0],
+ [0,                           0,              0, s4_r01_l01_s4,              0,              0, 0],
+ [0,                           0,              0, s4_r01_l02_s4,              0,              0, 0],
+ [0,                           0,              0, s4_r02_l01_s4,              0,              0, 0],
+ [0,                           0,              0, s4_r02_l02_s4,              0,              0, 0],
+ [0,                           0,              0,              0, s5_r01_l01_s5,              0, 0],
+ [0,                           0,              0,              0, s5_r01_l02_s5,              0, 0],
+ [0,                           0,              0,              0, s5_r02_l01_s5,              0, 0],
+ [0,                           0,              0,              0, s5_r02_l02_s5,              0, 0],
+ [0,                           0,              0,              0,              0, s6_r01_l01_s6, 0],
+ [0,                           0,              0,              0,              0, s6_r01_l02_s6, 0],
+ [0,                           0,              0,              0,              0, s6_r02_l01_s6, 0],
+ [0,                           0,              0,              0,              0, s6_r02_l02_s6, 0]
+]
+
+Lambda_y = Matrix(Lambda_y_data)
+
+# Construct Gamma1 (7 x 1)
+Gamma1 = Matrix([
+ [S1_F1],
+ [S2_F1],
+ [S3_F1],
+ [0],
+ [0],
+ [0],
+ [F2_F1]
+])
+
+# Construct Beta1 (7 x 7)
+Beta1 = Matrix([
+ [0, 0, 0, 0, 0, 0, 0],
+ [0, 0, 0, 0, 0, 0, 0],
+ [0, 0, 0, 0, 0, 0, 0],
+ [0, 0, 0, 0, 0, 0, S4_F2],
+ [0, 0, 0, 0, 0, 0, S5_F2],
+ [0, 0, 0, 0, 0, 0, S6_F2],
+ [0, 0, 0, 0, 0, 0, 0]
+])
+
+# Create identity matrix of the same dimension as Beta1 (7 x 7)
+I = eye(7)
+
+try:
+    # Compute Lambda_y * (I - Beta1)^-1 * Gamma1
+    result = Lambda_y * (I - Beta1).inv() * Gamma1
+    result = simplify(result)
+
+    print("Result of Lambda_y * (I - Beta1)^-1 * Gamma1:")
+    print(result)
+except Exception as e:
+    print(f"An error occurred: {e}")
+	
+	
+Result of Lambda_y * (I - Beta1)^-1 * Gamma1:
+Matrix([[_b[S1:0bn.t#c.F1]*_b[s1_r01_l02:0bn.t#c.S1]], 
+[_b[S1:0bn.t#c.F1]*_b[s1_r02_l01:0bn.t#c.S1]], 
+[_b[S1:0bn.t#c.F1]*_b[s1_r02_l02:0bn.t#c.S1]], 
+[_b[S2:0bn.t#c.F1]*_b[s2_r01_l01:0bn.t#c.S2]], 
+[_b[S2:0bn.t#c.F1]*_b[s2_r01_l02:0bn.t#c.S2]], 
+[_b[S2:0bn.t#c.F1]*_b[s2_r02_l01:0bn.t#c.S2]], 
+[_b[S2:0bn.t#c.F1]*_b[s2_r02_l02:0bn.t#c.S2]], 
+[_b[S3:0bn.t#c.F1]*_b[s3_r01_l01:0bn.t#c.S3]], 
+[_b[S3:0bn.t#c.F1]*_b[s3_r01_l02:0bn.t#c.S3]], 
+[_b[S3:0bn.t#c.F1]*_b[s3_r02_l01:0bn.t#c.S3]], 
+[_b[S3:0bn.t#c.F1]*_b[s3_r02_l02:0bn.t#c.S3]], 
+[_b[F2:0bn.t#c.F1]*_b[S4:0bn.t#c.F2]*_b[s4_r01_l01:0bn.t#c.S4]], 
+[_b[F2:0bn.t#c.F1]*_b[S4:0bn.t#c.F2]*_b[s4_r01_l02:0bn.t#c.S4]], 
+[_b[F2:0bn.t#c.F1]*_b[S4:0bn.t#c.F2]*_b[s4_r02_l01:0bn.t#c.S4]], 
+[_b[F2:0bn.t#c.F1]*_b[S4:0bn.t#c.F2]*_b[s4_r02_l02:0bn.t#c.S4]], 
+[_b[F2:0bn.t#c.F1]*_b[S5:0bn.t#c.F2]*_b[s5_r01_l01:0bn.t#c.S5]], 
+[_b[F2:0bn.t#c.F1]*_b[S5:0bn.t#c.F2]*_b[s5_r01_l02:0bn.t#c.S5]], 
+[_b[F2:0bn.t#c.F1]*_b[S5:0bn.t#c.F2]*_b[s5_r02_l01:0bn.t#c.S5]], 
+[_b[F2:0bn.t#c.F1]*_b[S5:0bn.t#c.F2]*_b[s5_r02_l02:0bn.t#c.S5]], 
+[_b[F2:0bn.t#c.F1]*_b[S6:0bn.t#c.F2]*_b[s6_r01_l01:0bn.t#c.S6]], 
+[_b[F2:0bn.t#c.F1]*_b[S6:0bn.t#c.F2]*_b[s6_r01_l02:0bn.t#c.S6]], 
+[_b[F2:0bn.t#c.F1]*_b[S6:0bn.t#c.F2]*_b[s6_r02_l01:0bn.t#c.S6]], 
+[_b[F2:0bn.t#c.F1]*_b[S6:0bn.t#c.F2]*_b[s6_r02_l02:0bn.t#c.S6]]])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
