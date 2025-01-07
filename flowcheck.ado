@@ -27,59 +27,37 @@ program flowcheck, rclass
 		local ynames `e(lyxars)'
 	}
 	collectsem, option(`option')
-
-	
 	// Main Mata routine
 	mata:  results = main(lxvars,lyvars,oyvars,params,params_real,glvls,cmdline,(1,2))
+	
 	if  (`option' == 0) {	// Model with exogenous latent variables only 
 		setupexogenousonly
-		mata: st_matrix("upsilon_x",upsilon_x_real)
-		mata: st_matrix("xonxi", xonxi_real)
 		python: SymbolicEquations.wrapper(["Lambdax1","Lambdax2","kappa1","kappa2"],option=0) 	
 		testnlroutine , eqxonxi(`eq0')
-		mat diff0 = xonxi - upsilon_x
-		mat fulltablexonxi = upsilon_x , xonxi , diff0 , r(resultxonxi)
-		mat colnames fulltablexonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
-		mat list fulltablexonxi
-		
-		return matrix fulltablexonxi = fulltablexonxi
+		tempname diff
+		mat `diff' = xonxi - upsilon_x
+		mat tablexonxi = upsilon_x , xonxi , `diff' , r(resultxonxi)
+		mat colnames tablexonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list tablexonxi
+		return matrix tablexonxi = tablexonxi
 	}
 	else { // Full SEM model 
 		setupfullsem
-		mata: st_matrix("upsilon_x",upsilon_x_real)
-		mata: st_matrix("upsilon_y",upsilon_y_real)
-		mata: st_matrix("xonxi", xonxi_real)
-		mata: st_matrix("yonxi", yonxi_real)
-		mata: st_matrix("yoneta", yoneta_real)
-		mata: st_matrix("yonxieta", yonxieta_real)
-		
 		python: SymbolicEquations.wrapper(["Lambdax1","Lambdax2","Lambday1","Lambday2","kappa1","kappa2","Gamma1","Gamma2","Beta1","Beta2","alpha1","alpha2"],option=1) 
 		testnlroutine , eqxonxi(`eq0') eqyonxi(`eq1') eqyoneta(`eq2') eqyonxieta(`eq3') 
-		
-		mat diff0 = xonxi - upsilon_x
-		mat fulltablexonxi = upsilon_x , xonxi , diff0 , r(resultxonxi)
-		mat colnames fulltablexonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
-		mat list fulltablexonxi
-		
-		mat diff1 = yonxi - upsilon_y
-		mat fulltableyonxi = upsilon_y , yonxi , diff1 , r(resultyonxi)
-		mat colnames fulltableyonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
-		mat list fulltableyonxi
-		
-		mat diff2 = yoneta - upsilon_y
-		mat fulltableyoneta = upsilon_y , yoneta , diff2 , r(resultyoneta)
-		mat colnames fulltableyoneta = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
-		mat list fulltableyoneta
-		
-		mat diff3 = yonxieta - upsilon_y
-		mat fulltableyonxieta = upsilon_y , yonxieta , diff3 , r(resultyonxieta)
-		mat colnames fulltableyonxieta = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
-		mat list fulltableyonxieta
-
-		return matrix fulltablexonxi = fulltablexonxi
-		return matrix fulltableyonxi = fulltableyonxi
-		return matrix fulltableyoneta = fulltableyoneta
-		return matrix fulltableyonxieta = fulltableyonxieta
+		local names xonxi yonxi yoneta yonxieta
+		forvalues i = 1/4 {
+			tempname diff 
+			local name `:word `i' of `names''
+			if `i' == 1 local observed upsilon_x
+			else local observed upsilon_y
+			
+			mat `diff' = `name' - `observed'
+			mat table`name' = `observed' , `name' ,`diff' , r(result`name')
+			mat colnames table`name' = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+			mat list table`name'
+			return matrix table`name' = table`name'	
+		}
 	}
 end 
 
@@ -125,6 +103,8 @@ program levelsforsem, rclass
 end
 
 // These two programs set symbolic mata matrices so they can be called by the python class "SymbolicEquations"
+// They also call mata matrices into stata that are used for the "testnlroutine" routine 
+
 program setupexogenousonly, nclass 
 	mata  upsilon_x_string = asarray(results.intercepts_string,"upsilon_x")
 	mata: upsilon_x_real = asarray(results.observed_effects,"upsilon_x")
@@ -133,6 +113,8 @@ program setupexogenousonly, nclass
 	mata: Lambdax2 = asarray(results.parammatrices_string,"Lambdax2")
 	mata: kappa1 = asarray(results.parammatrices_string,"kappa")[1...,1]
 	mata: kappa2 = asarray(results.parammatrices_string,"kappa")[1...,2]
+	mata: st_matrix("upsilon_x",upsilon_x_real)
+	mata: st_matrix("xonxi", xonxi_real)
 end 
 
 program setupfullsem, nclass
@@ -159,6 +141,13 @@ program setupfullsem, nclass
 	mata {
 		if (Beta1 == J(0,0,.)) Beta1 = Beta2 = J(cols(Lambday1),cols(Lambday1),0)
 	}
+	mata: st_matrix("upsilon_x",upsilon_x_real)
+	mata: st_matrix("upsilon_y",upsilon_y_real)
+	mata: st_matrix("xonxi", xonxi_real)
+	mata: st_matrix("yonxi", yonxi_real)
+	mata: st_matrix("yoneta", yoneta_real)
+	mata: st_matrix("yonxieta", yonxieta_real)
+		
 end 
 
 program testnlroutine, rclass 
@@ -412,7 +401,7 @@ void group_pathcoefs(struct myproblem scalar pr)
 	else {
 		// Structural Coefficients 
 		check1 = J(rows(pr.d.pathcoefs),1,pr.oyvars)
-		s1 = opposite_mask(rowmissing(editvalue(indexnot(check1, pr.d.pathcoefs[1...,1]),0,.)))
+		s1 = opposite_mask(rowmissing(editvalue(indexnot(check1, pr.d.pathcoefs[1...,1]),0,.))) // need to get rid of this and replace with the method in get_intercepts , i think the code will break when you use nocapslatent method
 		structcoefs = select(pr.d.pathcoefs,s1)
 		res = J(rows(structcoefs),length(pr.lxvars),.)
 		for (i=1;i<=length(pr.lxvars);i++) res[1...,i] = strpos(structcoefs[1...,1],pr.lxvars[i])
@@ -430,31 +419,31 @@ void group_pathcoefs(struct myproblem scalar pr)
 		s2b = opposite_mask(s2a)
 		pr.d.lambday_bag = select(loadings,s2a)
 		pr.d.lambdax_bag = select(loadings,s2b)
+
 	}
 }
 // group_intercepts: Organize intercept parameters into y and x vectors 
 void group_intercepts(struct myproblem scalar pr)
 {
-    real   matrix pos1,pos2,s1,s2
-    string matrix check1,check2,ys,xs,upsilon_y,upsilon_x
+    real   matrix pos1,pos2,s1,s2,res
+    string matrix ys,xs,upsilon_y,upsilon_x
 	
 	pos1 = strpos(pr.d.lambdax_bag[1...,1],":")
 	xs = substr(pr.d.lambdax_bag[1...,1],J(rows(pr.d.lambdax_bag),1,1),pos1:-1) 
-	check1 = J(rows(pr.d.intercepts),1,xs')
-	s1 = rowmissing(editvalue(indexnot(check1, pr.d.intercepts[1...,1]),0,.)) 
+	res = J(rows(pr.d.intercepts),length(xs),.)
+	for (i=1;i<=length(xs);i++) res[1...,i] = strpos(pr.d.intercepts[1...,1],xs[i])
+	s1 = rowsum(res)
 	upsilon_x = select(pr.d.intercepts,s1)
 	upsilon_x = "_b[" :+ upsilon_x  :+ "]"
 	asarray(pr.d.intercepts_string,"upsilon_x",upsilon_x)
 
 	if (pr.lyvars != J(1,0,"")) {
-		pos2 = strpos(pr.d.lambday_bag[1...,1],":")
-		ys = substr(pr.d.lambday_bag[1...,1],J(rows(pr.d.lambday_bag),1,1),pos2:-1) 
-		check2 = J(rows(pr.d.intercepts),1,ys')
-		s2 = rowmissing(editvalue(indexnot(check2, pr.d.intercepts[1...,1]),0,.)) 
+		s2 = opposite_mask(s1)
 		upsilon_y = select(pr.d.intercepts,s2)
 		upsilon_y = "_b[" :+ upsilon_y  :+ "]"
 		asarray(pr.d.intercepts_string,"upsilon_y",upsilon_y)
 	}
+
 }
 
 // ---------------------------------------------------------------------------//
