@@ -1,30 +1,90 @@
-*! Version 3 
+version 18.0
 
-mata mata clear 
+//Currently a bug in the mata code. When the exogenous and endogenous observed variables have the same stem (e.g., all named x?), they are not being seperated into exogenous and endogenous groups. Also multiple times in the code I check whether Beta is missing and then do something. Feels like this could cause issues later. Bug in the python code when there is 
+
+
+cap prog drop _all 
+mata mata clear
 
 // ---------------------------------------------------------------------------//
 // Stata Code 
 // ---------------------------------------------------------------------------//
 
-cap prog drop levelsforsem 
-prog levelsforsem, rclass  
-	syntax varlist(max=1), Local(string)
-	qui levelsof `varlist', local(temp)
-	forvalues i = 1/`:word count `temp'' {
-		local lvl = `:word `i' of `temp''
-		if (`i' == 1) local new `lvl'bn.`varlist'
-		else local new `lvl'.`varlist'     
-		local `local' : list `local' | new 
-	}
-	return local `local'  ``local''
-end
-
-cap prog drop collectsem 
-prog collectsem, nclass 
+program flowcheck, rclass 
 	syntax, ESTimates(string)
 	
-	estimates restore `estimates'
+	python: from __main__ import SymbolicEquations
 	
+	estimates restore `estimates'
+	if  (`:word count `e(lyvars)'' == 0) {
+		local option = 0 
+		local xnames `e(oyvars)'
+		di "`xnames'"
+	}
+	else {
+		local option = 1
+		local xnames `e(lyxars)'
+		local ynames `e(lyxars)'
+	}
+	collectsem, option(`option')
+
+	
+	// Main Mata routine
+	mata:  results = main(lxvars,lyvars,oyvars,params,params_real,glvls,cmdline,(1,2))
+	if  (`option' == 0) {	// Model with exogenous latent variables only 
+		setupexogenousonly
+		mata: st_matrix("upsilon_x",upsilon_x_real)
+		mata: st_matrix("xonxi", xonxi_real)
+		python: SymbolicEquations.wrapper(["Lambdax1","Lambdax2","kappa1","kappa2"],option=0) 	
+		testnlroutine , eqxonxi(`eq0')
+		mat diff0 = xonxi - upsilon_x
+		mat fulltablexonxi = upsilon_x , xonxi , diff0 , r(resultxonxi)
+		mat colnames fulltablexonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list fulltablexonxi
+		
+		return matrix fulltablexonxi = fulltablexonxi
+	}
+	else { // Full SEM model 
+		setupfullsem
+		mata: st_matrix("upsilon_x",upsilon_x_real)
+		mata: st_matrix("upsilon_y",upsilon_y_real)
+		mata: st_matrix("xonxi", xonxi_real)
+		mata: st_matrix("yonxi", yonxi_real)
+		mata: st_matrix("yoneta", yoneta_real)
+		mata: st_matrix("yonxieta", yonxieta_real)
+		
+		python: SymbolicEquations.wrapper(["Lambdax1","Lambdax2","Lambday1","Lambday2","kappa1","kappa2","Gamma1","Gamma2","Beta1","Beta2","alpha1","alpha2"],option=1) 
+		testnlroutine , eqxonxi(`eq0') eqyonxi(`eq1') eqyoneta(`eq2') eqyonxieta(`eq3') 
+		
+		mat diff0 = xonxi - upsilon_x
+		mat fulltablexonxi = upsilon_x , xonxi , diff0 , r(resultxonxi)
+		mat colnames fulltablexonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list fulltablexonxi
+		
+		mat diff1 = yonxi - upsilon_y
+		mat fulltableyonxi = upsilon_y , yonxi , diff1 , r(resultyonxi)
+		mat colnames fulltableyonxi = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list fulltableyonxi
+		
+		mat diff2 = yoneta - upsilon_y
+		mat fulltableyoneta = upsilon_y , yoneta , diff2 , r(resultyoneta)
+		mat colnames fulltableyoneta = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list fulltableyoneta
+		
+		mat diff3 = yonxieta - upsilon_y
+		mat fulltableyonxieta = upsilon_y , yonxieta , diff3 , r(resultyonxieta)
+		mat colnames fulltableyonxieta = "Obs" "MI" "MI - obs" "Pval" "Chi^2" "df"
+		mat list fulltableyonxieta
+
+		return matrix fulltablexonxi = fulltablexonxi
+		return matrix fulltableyonxi = fulltableyonxi
+		return matrix fulltableyoneta = fulltableyoneta
+		return matrix fulltableyonxieta = fulltableyonxieta
+	}
+end 
+
+program collectsem, nclass 
+	syntax, option(real)
 	// Command line and parameter matrices (string and real)
 	local cmdline = e(cmdline)
 	mata  cmdline = st_local("cmdline")
@@ -39,7 +99,7 @@ prog collectsem, nclass
 	local oyvars = e(oyvars)
 	mata  oyvars = tokens(st_local("oyvars"))
 	// Set Beta to missing if odel contains only exogenous latent variables. This option controls processing in the mata code
-	if  `:word count `e(lyvars)'' == 0 {
+	if  (`option') == 0 {
 		mata lyvars = J(1,0,"")
 	}
 	else {
@@ -52,6 +112,126 @@ prog collectsem, nclass
 	mata  glvls = tokens(st_local("glvls")) 
 end 
 
+program levelsforsem, rclass  
+	syntax varlist(max=1), Local(string)
+	qui levelsof `varlist', local(temp)
+	forvalues i = 1/`:word count `temp'' {
+		local lvl = `:word `i' of `temp''
+		if (`i' == 1) local new `lvl'bn.`varlist'
+		else local new `lvl'.`varlist'     
+		local `local' : list `local' | new 
+	}
+	return local `local'  ``local''
+end
+
+// These two programs set symbolic mata matrices so they can be called by the python class "SymbolicEquations"
+program setupexogenousonly, nclass 
+	mata  upsilon_x_string = asarray(results.intercepts_string,"upsilon_x")
+	mata: upsilon_x_real = asarray(results.observed_effects,"upsilon_x")
+	mata: xonxi_real = asarray(results.mi_effects ,"mi_effects_xonxi")
+	mata: Lambdax1 = asarray(results.parammatrices_string,"Lambdax1")
+	mata: Lambdax2 = asarray(results.parammatrices_string,"Lambdax2")
+	mata: kappa1 = asarray(results.parammatrices_string,"kappa")[1...,1]
+	mata: kappa2 = asarray(results.parammatrices_string,"kappa")[1...,2]
+end 
+
+program setupfullsem, nclass
+	mata  upsilon_x_string = asarray(results.intercepts_string,"upsilon_x")
+	mata  upsilon_y_string = asarray(results.intercepts_string,"upsilon_y")
+	mata: upsilon_x_real = asarray(results.observed_effects ,"upsilon_x")
+	mata: upsilon_y_real = asarray(results.observed_effects ,"upsilon_y")
+	mata: xonxi_real = asarray(results.mi_effects ,"mi_effects_xonxi")
+	mata: yonxi_real = asarray(results.mi_effects ,"mi_effects_yonxi")
+	mata: yoneta_real = asarray(results.mi_effects ,"mi_effects_yoneta")
+	mata: yonxieta_real = asarray(results.mi_effects ,"mi_effects_yonxieta")
+	mata: Beta1 = asarray(results.parammatrices_string,"Beta1")
+	mata: Beta2 = asarray(results.parammatrices_string,"Beta2")
+	mata: Gamma1 = asarray(results.parammatrices_string,"Gamma1")
+	mata: Gamma2 = asarray(results.parammatrices_string,"Gamma2")
+	mata: Lambdax1 = asarray(results.parammatrices_string,"Lambdax1")
+	mata: Lambdax2 = asarray(results.parammatrices_string,"Lambdax2")
+	mata: Lambday1 = asarray(results.parammatrices_string,"Lambday1")
+	mata: Lambday2 = asarray(results.parammatrices_string,"Lambday2")
+	mata: kappa1 = asarray(results.parammatrices_string,"kappa")[1...,1]
+	mata: kappa2 = asarray(results.parammatrices_string,"kappa")[1...,2]
+	mata: alpha1 = asarray(results.parammatrices_string,"alpha")[1...,1]
+	mata: alpha2 = asarray(results.parammatrices_string,"alpha")[1...,2]
+	mata {
+		if (Beta1 == J(0,0,.)) Beta1 = Beta2 = J(cols(Lambday1),cols(Lambday1),0)
+	}
+end 
+
+program testnlroutine, rclass 
+	syntax, eqxonxi(string) [eqyonxi(string) eqyoneta(string) eqyonxieta(string)]
+	tempname tempmat resultxonxi resultyonxi resultyoneta resultyonxieta
+	
+	if "`eqyonxi'" == "" {
+		mata: obseqs = upsilon_x_string[1...,2] :+ "-" :+ upsilon_x_string[1...,1]
+		mata: mieqs = ustrsplit(st_local("eqxonxi"),",")'
+		mata: st_local("numrows",strofreal(rows(mieqs)))
+		forvalues i = 1/`numrows' {
+			mata st_local("mieq`i'",mieqs[`i'])
+			mata st_local("obseq`i'",obseqs[`i'])
+			qui testnl `obseq`i'' = `mieq`i''
+			mat `tempmat' = r(p),r(chi2),r(df)
+			mat `resultxonxi ' = (nullmat(`resultxonxi') \ `tempmat')
+		}
+		return matrix resultxonxi  = `resultxonxi' 
+	}
+	else {
+		// eqyonxi
+		mata: obseqs = upsilon_x_string[1...,2] :+ "-" :+ upsilon_x_string[1...,1]
+		mata: mieqs0 = ustrsplit(st_local("eqxonxi"),",")'
+		mata: st_local("numrows",strofreal(rows(mieqs0)))
+		forvalues i = 1/`numrows' {
+			mata st_local("mieq`i'",mieqs0[`i'])
+			mata st_local("obseq`i'",obseqs[`i'])
+			qui testnl `obseq`i'' = `mieq`i''
+			mat `tempmat' = r(p),r(chi2),r(df)
+			mat `resultxonxi ' = (nullmat(`resultxonxi') \ `tempmat')
+		}
+		return matrix resultxonxi  = `resultxonxi' 
+		
+		// eqyonxi
+		mata: obseqs = upsilon_y_string[1...,2] :+ "-" :+ upsilon_y_string[1...,1]
+		mata: mieqs1 = ustrsplit(st_local("eqyonxi"),",")'
+		mata: st_local("numrows",strofreal(rows(mieqs1)))
+		forvalues i = 1/`numrows' {
+			mata st_local("mieq`i'",mieqs1[`i'])
+			mata st_local("obseq`i'",obseqs[`i'])
+			qui testnl `obseq`i'' = `mieq`i''
+			mat `tempmat' = r(p),r(chi2),r(df)
+			mat `resultyonxi' = (nullmat(`resultyonxi') \ `tempmat')
+		}
+		return matrix resultyonxi  = `resultyonxi' 
+		
+		// eqyoneta
+		mata: obseqs = upsilon_y_string[1...,2] :+ "-" :+ upsilon_y_string[1...,1]
+		mata: mieqs2 = ustrsplit(st_local("eqyoneta"),",")'
+		mata: st_local("numrows",strofreal(rows(mieqs2)))
+		forvalues i = 1/`numrows' {
+			mata st_local("mieq`i'",mieqs2[`i'])
+			mata st_local("obseq`i'",obseqs[`i'])
+			qui testnl `obseq`i'' = `mieq`i''
+			mat `tempmat' = r(p),r(chi2),r(df)
+			mat `resultyoneta' = (nullmat(`resultyoneta') \ `tempmat')
+		}
+		return matrix resultyoneta  = `resultyoneta' 
+
+		// eqyonxieta
+		mata: obseqs = upsilon_y_string[1...,2] :+ "-" :+ upsilon_y_string[1...,1]
+		mata: mieqs3 = ustrsplit(st_local("eqyonxieta"),",")'
+		mata: st_local("numrows",strofreal(rows(mieqs3)))
+		forvalues i = 1/`numrows' {
+			mata st_local("mieq`i'",mieqs3[`i'])
+			mata st_local("obseq`i'",obseqs[`i'])
+			qui testnl `obseq`i'' = `mieq`i''
+			mat `tempmat' = r(p),r(chi2),r(df)
+			mat `resultyonxieta' = (nullmat(`resultyonxieta') \ `tempmat')
+		}
+		return matrix resultyonxieta  = `resultyonxieta' 
+	}
+end 
 
 // ---------------------------------------------------------------------------//
 // Mata Code 
@@ -60,7 +240,7 @@ end
 // ---------------------------------------------------------------------------//
 // Structures 
 // ---------------------------------------------------------------------------//
-
+mata mata clear 
 mata
 // Define structures for the SEM problem and derived results
 struct myproblem  {
@@ -90,12 +270,8 @@ struct derived {
 	transmorphic    parammatrices_real 		// Stores real coefficients
 	transmorphic    intercepts_string 		// Stores symbolic intercepts
 	transmorphic    intercepts_real 		// Stores real intercepts
-	transmorphic    equations 				// 
 	transmorphic    observed_effects		// Observed Effects 
 	transmorphic    mi_effects 				// Model implied effects
-	//transmorphic    adj_effects			// Adjusted Effects  
-	
-	// Maybe should write an additonal routine to collect variances and covariances
 }
 
 // Initialize the derived structure with empty matrices and a new anchorkey asarray
@@ -114,7 +290,6 @@ void initialize_objects(struct derived scalar d)
 	d.intercepts_real = asarray_create()	
 	d.observed_effects = asarray_create()	
 	d.mi_effects = asarray_create()	
-	//d.adj_effects = asarray_create()	
 }
 
 // ---------------------------------------------------------------------------//
@@ -153,9 +328,11 @@ struct derived main(lxvars,lyvars,oyvars,params,params_real,glvls,cmdline,compar
 	fill_intercepts(pr)
 	observed_effects(pr)
 	mi_effects_xonxi(pr)
-	mi_effects_yonxi(pr)
-	mi_effects_yoneta(pr)
-	mi_effects_yonxieta(pr)
+	if (pr.lyvars != J(1,0,"")) {
+		mi_effects_yonxi(pr)
+		mi_effects_yoneta(pr)
+		mi_effects_yonxieta(pr)
+	}
 	
 	// return the derived structure
 	return(pr.d)
@@ -481,7 +658,7 @@ void fill_intercepts(struct myproblem scalar pr)
 //----------------------------------------------------------------------------//
 void observed_effects(struct myproblem scalar pr)
 {
-	real matrix tempmat,result
+	real matrix tempmat,result,effects 	
 	string scalar key
 	real scalar loc
 
@@ -494,72 +671,78 @@ void observed_effects(struct myproblem scalar pr)
 }
 void mi_effects_xonxi(struct myproblem scalar pr)
 {
-	real matrix kappa1,kappa2,Lambdax1,Lambdax2,result 
+	real matrix kappa1,kappa2,Lambdax1,Lambdax2,result,effects 	
 	
 	 Lambdax1 = asarray(pr.d.parammatrices_real,"Lambdax1")
      Lambdax2 = asarray(pr.d.parammatrices_real,"Lambdax2")
 	 kappa1 = asarray(pr.d.parammatrices_real,"kappa")[1...,1]
 	 kappa2 = asarray(pr.d.parammatrices_real,"kappa")[1...,2]
-	 result = J(rows(Lambdax1),2,.)
 	 
+	 result = J(rows(Lambdax1),2,.)
 	 result[1...,1] = Lambdax1*kappa1
 	 result[1...,2] = Lambdax2*kappa2
+	 effects = result[1...,2] - result[1...,1]
 	 
-	 asarray(pr.d.mi_effects,"mi_effects_xonxi",result[1...,2] - result[1...,1])
+	 asarray(pr.d.mi_effects,"mi_effects_xonxi",effects)
 }
 void mi_effects_yonxi(struct myproblem scalar pr)
 {
 	real matrix kappa1,kappa2,Lambday1,Lambday2,
-	            Beta1,Beta2,Gamma1,Gamma2,result 	
+	            Beta1,Beta2,Gamma1,Gamma2,result, effects 	
 	Lambday1 = asarray(pr.d.parammatrices_real,"Lambday1")
 	Lambday2 = asarray(pr.d.parammatrices_real,"Lambday2")	
 	Beta1 = asarray(pr.d.parammatrices_real,"Beta1")
 	Beta2 = asarray(pr.d.parammatrices_real,"Beta2")
-	if (Beta1 == J(0,0,.)) Beta1 = Beta2 = 0
+	if (Beta1 == J(0,0,.)) Beta1 = Beta2 = J(cols(Lambday1),cols(Lambday1),0)
 	Gamma1 = asarray(pr.d.parammatrices_real,"Gamma1")
 	Gamma2 = asarray(pr.d.parammatrices_real,"Gamma2")
 	kappa1 = asarray(pr.d.parammatrices_real,"kappa")[1...,1]
 	kappa2 = asarray(pr.d.parammatrices_real,"kappa")[1...,2]
+	
 	result = J(rows(Lambday1),2,.)
-
 	result[1...,1] = Lambday1 * luinv(I(rows(Beta1)) - Beta1) * Gamma1 * kappa1
 	result[1...,2] = Lambday2 * luinv(I(rows(Beta2)) - Beta2) * Gamma2 * kappa2 
-	asarray(pr.d.mi_effects,"mi_effects_yonxi",result[1...,2] - result[1...,1])
+	effects = result[1...,2] - result[1...,1]
+	
+	asarray(pr.d.mi_effects,"mi_effects_yonxi",effects)
 }
 void mi_effects_yoneta(struct myproblem scalar pr)
 {
 	real matrix kappa1,kappa2, alpha1,alpha2,Lambday1,Lambday2,
-	            Beta1,Beta2,Gamma1,Gamma2,result 	
+	            Beta1,Beta2,Gamma1,Gamma2,result,effects 	 	
 	Lambday1 = asarray(pr.d.parammatrices_real,"Lambday1")
 	Lambday2 = asarray(pr.d.parammatrices_real,"Lambday2")	
 	Beta1 = asarray(pr.d.parammatrices_real,"Beta1")
 	Beta2 = asarray(pr.d.parammatrices_real,"Beta2") 
-	if (Beta1 == J(0,0,.)) Beta1 = Beta2 = 0
+	if (Beta1 == J(0,0,.)) Beta1 = Beta2 = J(cols(Lambday1),cols(Lambday1),0)
 	Gamma1 = asarray(pr.d.parammatrices_real,"Gamma1")
 	Gamma2 = asarray(pr.d.parammatrices_real,"Gamma2")
 	alpha1 = asarray(pr.d.parammatrices_real,"alpha")[1...,1]
 	alpha2 = asarray(pr.d.parammatrices_real,"alpha")[1...,2]
 	kappa1 = asarray(pr.d.parammatrices_real,"kappa")[1...,1]
 	kappa2 = asarray(pr.d.parammatrices_real,"kappa")[1...,2]
+	
 	result = J(rows(Lambday1),2,.)
-
 	result[1...,1] = (Lambday1 * alpha1) - (Lambday1 * luinv(I(rows(Beta1)) - Beta1) * Gamma1 * kappa1)
 	result[1...,2] = (Lambday2 * alpha2) - (Lambday2 * luinv(I(rows(Beta2)) - Beta2) * Gamma2 * kappa2) 
-	asarray(pr.d.mi_effects,"mi_effects_yoneta",result[1...,2] - result[1...,1])
+	effects = result[1...,2] - result[1...,1]
+	
+	asarray(pr.d.mi_effects,"mi_effects_yoneta",effects)
 }
 void mi_effects_yonxieta(struct myproblem scalar pr)
 {
-	real matrix alpha1,alpha2,Lambday1,Lambday2,result 	
+	real matrix alpha1,alpha2,Lambday1,Lambday2,result, effects 	 	
 	Lambday1 = asarray(pr.d.parammatrices_real,"Lambday1")
 	Lambday2 = asarray(pr.d.parammatrices_real,"Lambday2")	
 	alpha1 = asarray(pr.d.parammatrices_real,"alpha")[1...,1]
 	alpha2 = asarray(pr.d.parammatrices_real,"alpha")[1...,2]
 
 	result = J(rows(Lambday1),2,.)
-
 	result[1...,1] = (Lambday1 * alpha1) 
 	result[1...,2] = (Lambday2 * alpha2) 
-	asarray(pr.d.mi_effects,"mi_effects_yonxieta",result[1...,2] - result[1...,1])
+	effects = result[1...,2] - result[1...,1]
+	
+	asarray(pr.d.mi_effects,"mi_effects_yonxieta",effects)
 }
 
 // Helper functions 
@@ -572,134 +755,107 @@ end
 //----------------------------------------------------------------------------//
 python 
 
-import numpy as np
-from sympy import Symbol, Matrix, eye 
-from sfi import Mata, Macro
+class SymbolicEquations:
+    import numpy as np
+    from sympy import Symbol, Matrix, eye
+    from sfi import Mata, Macro
 
+    @classmethod
+    def wrapper(cls, matnames, option=0):
+        dict_matrices = cls.create_symbolic_matrices(matnames)
 
-def python_wrapper(matnames,option=0):
-	dict = create_symbolic_matrices(matnames)
-	
-	if option == 0:
-		eq0 = equations_xonxi(dict)
-		eqlist = [eq0]
-	else: 
-		eq0 = equations_xonxi(dict)
-		eq1 = equations_yonxi(dict)
-		eq2 = equations_yoneta(dict)
-		eq3 = equations_yonxieta(dict)
-		eqlist = [eq0,eq1,eq2,eq3]
-		
-	return_as_macro(eqlist)
-	
-def create_symbolic_matrices(matnames):
-    matrices = {}
+        if option == 0:
+            eq0 = cls.equations_xonxi(dict_matrices)
+            eqlist = [eq0]
+        else:
+            eq0 = cls.equations_xonxi(dict_matrices)
+            eq1 = cls.equations_yonxi(dict_matrices)
+            eq2 = cls.equations_yoneta(dict_matrices)
+            eq3 = cls.equations_yonxieta(dict_matrices)
+            eqlist = [eq0, eq1, eq2, eq3]
 
-    for x in range(len(matnames)):
-        # Retrieve matrix using Mata.get
-        matrix = np.matrix(Mata.get(f"{matnames[x]}"))
-        
-        # Create dictionary for symbolic variables
-        variables = {}
-        for index, element in np.ndenumerate(matrix):
-            var_name = f"{matnames[x]}{index[0]}_{index[1]}"
-            if element == "":
-                variables[var_name] = 0
-            else:
-                variables[var_name] = Symbol(f"{element}")
+        cls.return_as_macro(eqlist)
 
-        # Create symbolic matrix
-        rows, cols = matrix.shape
-        matrices[f"{matnames[x]}"] = Matrix(rows, cols, lambda i, j: variables[f"{matnames[x]}{i}_{j}"])
+    @classmethod
+    def create_symbolic_matrices(cls, matnames):
+        matrices = {}
+        for x in range(len(matnames)):
+            matrix = cls.np.matrix(cls.Mata.get(f"{matnames[x]}"))
+            variables = {}
+            for index, element in cls.np.ndenumerate(matrix):
+                var_name = f"{matnames[x]}{index[0]}_{index[1]}"
+                if element == "":
+                    variables[var_name] = 0
+                else:
+                    variables[var_name] = cls.Symbol(f"{element}")
 
-    return matrices
+            rows, cols = matrix.shape
+            matrices[f"{matnames[x]}"] = cls.Matrix(
+                rows, cols, lambda i, j: variables[f"{matnames[x]}{i}_{j}"]
+            )
+        return matrices
 
-def equations_xonxi(matrices):
-	Lambdax1 = matrices["Lambdax1"]
-	Lambdax2 = matrices["Lambdax2"]
-	kappa1 = matrices["kappa1"]
-	kappa2 = matrices["kappa2"]
-	
-	eq1 = Lambdax1 * kappa1
-	eq2 = Lambdax2 * kappa2
-	eq = eq2 - eq1
-	
-	return eq
-	
-def equations_yonxi(matrices):
-	Lambday1 = matrices["Lambday1"]
-	Lambday2 = matrices["Lambday2"]
-	Gamma1 = matrices["Gamma1"]
-	Gamma2 = matrices["Gamma2"]
-	Beta1 = matrices["Beta1"]
-	Beta2 = matrices["Beta2"]
-	kappa1 = matrices["kappa1"]
-	kappa2 = matrices["kappa2"]
-	I = eye(Beta1.shape[0])
-	
-	eq1 = Lambday1 * (I - Beta1).inv() * Gamma1 * kappa1
-	eq2 = Lambday2 * (I - Beta2).inv() * Gamma2 * kappa2
-	eq = eq2 - eq1 
-	
-	return eq
-	
-def equations_yoneta(matrices):
-	Lambday1 = matrices["Lambday1"]
-	Lambday2 = matrices["Lambday2"]
-	Gamma1 = matrices["Gamma1"]
-	Gamma2 = matrices["Gamma2"]
-	Beta1 = matrices["Beta1"]
-	Beta2 = matrices["Beta2"]
-	kappa1 = matrices["kappa1"]
-	kappa2 = matrices["kappa2"]
-	alpha1 = matrices["alpha1"]
-	alpha2 = matrices["alpha2"]
-	I = eye(Beta1.shape[0])
-	
-	eq1 = (Lambday1 * alpha1) - (Lambday1 * (I - Beta1).inv() * Gamma1 * kappa1)
-	eq2 = (Lambday2 * alpha2) - (Lambday2 * (I - Beta2).inv() * Gamma2 * kappa2)
-	eq = eq2 - eq1 
-	
-	return eq
-	
-def equations_yonxieta(matrices):
-	Lambday1 = matrices["Lambday1"]
-	Lambday2 = matrices["Lambday2"]
-	alpha1 = matrices["alpha1"]
-	alpha2 = matrices["alpha2"]
-	
-	eq1 = Lambday1 * alpha1
-	eq2 = Lambday2 * alpha2
-	eq = eq2 - eq1
-	
-	return eq
+    @classmethod
+    def equations_xonxi(cls, matrices):
+        eq = (
+            matrices["Lambdax2"] * matrices["kappa2"]
+            - matrices["Lambdax1"] * matrices["kappa1"]
+        )
+        return eq
 
-def return_as_macro(list):
-	for i, eq in enumerate(list):
-		nested_list = eq.tolist()
-		string = ", ".join(map(str, [item for sublist in nested_list for item in sublist]))
-		Macro.setGlobal(f"eq{i}", string)
-		Macro.setLocal(f"eq{i}", string)
-			
+    @classmethod
+    def equations_yonxi(cls, matrices):
+        I = cls.eye(matrices["Beta1"].shape[0])
+        eq = (
+            matrices["Lambday2"]
+            * (I - matrices["Beta2"]).inv()
+            * matrices["Gamma2"]
+            * matrices["kappa2"]
+            - matrices["Lambday1"]
+            * (I - matrices["Beta1"]).inv()
+            * matrices["Gamma1"]
+            * matrices["kappa1"]
+        )
+        return eq
+
+    @classmethod
+    def equations_yoneta(cls, matrices):
+        I = cls.eye(matrices["Beta1"].shape[0])
+        eq = (
+            (matrices["Lambday2"] * matrices["alpha2"])
+            - (
+                matrices["Lambday2"]
+                * (I - matrices["Beta2"]).inv()
+                * matrices["Gamma2"]
+                * matrices["kappa2"]
+            )
+            - (
+                (matrices["Lambday1"] * matrices["alpha1"])
+                - (
+                    matrices["Lambday1"]
+                    * (I - matrices["Beta1"]).inv()
+                    * matrices["Gamma1"]
+                    * matrices["kappa1"]
+                )
+            )
+        )
+        return eq
+
+    @classmethod
+    def equations_yonxieta(cls, matrices):
+        eq = (
+            matrices["Lambday2"] * matrices["alpha2"]
+            - matrices["Lambday1"] * matrices["alpha1"]
+        )
+        return eq
+
+    @classmethod
+    def return_as_macro(cls, eqlist):
+        for i, eq in enumerate(eqlist):
+            nested_list = eq.tolist()
+            string = ", ".join(
+                map(str, [item for sublist in nested_list for item in sublist])
+            )
+            cls.Macro.setLocal(f"eq{i}", string)
 end 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
