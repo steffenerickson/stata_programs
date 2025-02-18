@@ -1,7 +1,10 @@
-version 18.0
 
-cap prog drop _all 
-mata mata clear
+
+// TO DO -> Need to estimate standard errors for just the effects 
+
+
+
+version 18.0
 
 // ---------------------------------------------------------------------------//
 // Stata Code 
@@ -226,7 +229,6 @@ end
 // ---------------------------------------------------------------------------//
 // Structures 
 // ---------------------------------------------------------------------------//
-mata mata clear 
 mata
 // Define structures for the SEM problem and derived results
 struct myproblem  {

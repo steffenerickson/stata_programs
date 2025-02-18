@@ -296,6 +296,8 @@ void row_to_col(real vector v)
 	else v = v 
 }
 
+
+
 real matrix satterthwaite(real vector variances,
 						  real vector df,
 						  real scalar ci_level)
@@ -310,6 +312,32 @@ real matrix satterthwaite(real vector variances,
 	lower = variances:* (2*r:^2:/invchi2(df,(1+ci_level)/2))
 	res = lower , upper 
 	return(res) 
+}
+
+real scalar relativevariance(real matrix true, real matrix obs, real colvector obsmeans, real scalar df) 
+{
+	return(profilevar(true,obsmeans,df)/profilevar(obs,obsmeans,df))
+}
+
+real scalar profilevar(real matrix covmat, real colvector obsmeans, real scalar df)
+{
+	real scalar avgdiag, avgelements, profilevar
+	
+	avgdiag = sum(diagonal(covmat)) / rows(covmat)
+	avgelements = sum(covmat) / (rows(covmat) * rows(covmat))
+	profilevar = ((df - 1) / df) * (avgdiag - avgelements) + variance(obsmeans) / rows(obsmeans)
+	return(profilevar)
+}
+
+real scalar errorprofilevar(real matrix errorcovmat)
+{
+	real scalar avgdiag, avgelements, profilevar
+	
+	avgdiag = sum(diagonal(errorcovmat)) / rows(errorcovmat)
+	avgelements = sum(errorcovmat) / (rows(errorcovmat) * rows(errorcovmat))
+	profilevar = avgdiag - avgelements
+	return(profilevar)
+
 }
 
 real matrix off_diag(real matrix cov_mat)
