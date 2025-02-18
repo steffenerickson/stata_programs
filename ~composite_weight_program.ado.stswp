@@ -23,8 +23,8 @@ program weightSEs, rclass
 	quietly python: compositeweights("symbolmat")
 	
 	* use equations to compute SEs via delta method
-	mata: `weqs' = ustrsplit(st_local("eq"),",")
-	mata: st_local("numrows",strofreal(cols(`weqs')))
+	mata `weqs' = ustrsplit(st_local("eq"),",")
+	mata st_local("numrows",strofreal(cols(`weqs')))
 	forvalues i = 1/`numrows' {
 		mata st_local("weq`i'",`weqs'[`i'])
 		quietly nlcom `weq`i''
@@ -45,9 +45,7 @@ program weightSEs, rclass
 end
 
 mata 
-string matrix symbolmat(real matrix X,
-                       string vector rn,
-					   string vector cn)
+string matrix symbolmat(real matrix X,string vector rn,string vector cn)
 {
 	real scalar   	pos1,pos2
 	string vector 	rn2,cn2 
