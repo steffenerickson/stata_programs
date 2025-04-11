@@ -1300,7 +1300,6 @@ real matrix Y(real matrix X, real matrix L)
 }
 end
 
-end 
 	
 
 
