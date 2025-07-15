@@ -207,6 +207,26 @@ string matrix sort_desc_length(string vector M)
 	return(res)
 }
 
+string matrix sort_asc_length(string vector M)
+{
+	real   scalar 		i,j
+	string scalar		temp 
+	string matrix 		res
+	
+	res = M 
+	for (i=2;i<=length(M);i++){
+		temp = res[i]
+		j = i - 1
+		while (j >= 1 & strlen(temp) < strlen(res[j])) {
+			res[j + 1] = res[j]
+			j--
+			if (j < 1) break 
+		}
+		res[j+1] = temp 
+	}
+	return(res)
+}
+
 // Rule π(α̇) = {1 if α = ω; and, otherwise, the product of the sample sizes for all indices in α̇}
 real vector get_facetlevelproducts(string vector effects, string vector facets, real vector fls)
 {
@@ -1242,6 +1262,7 @@ string matrix splittext(string matrix text, string scalar regex)
 	}
 	return(res) 
 }
+end 
 
 * ---------------------------------------------------------------------------- * 
 *! Generalized Local Linear Approximation - Functions to create embeddings matrix 
@@ -1300,7 +1321,6 @@ real matrix Y(real matrix X, real matrix L)
 }
 end
 
-end 
 	
 
 

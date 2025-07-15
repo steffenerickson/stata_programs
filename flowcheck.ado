@@ -231,7 +231,7 @@ end
 // ---------------------------------------------------------------------------//
 mata
 // Define structures for the SEM problem and derived results
-struct myproblem  {
+struct myproblemfc  {
 	string vector   lxvars           		// Latent exogenous variables
 	string vector   lyvars           		// Latent endogenous variables
 	string vector   oxvars           		// Observed exogenous variables
@@ -243,10 +243,10 @@ struct myproblem  {
 	real   vector   comparegroups    		// Indices of groups to compare
 	real   scalar   higherorder   	 		// Higher order factor model method option 
 	string scalar   higherorderitem  		// Higher order factor model achor item 
-	struct derived  scalar d         		// Nested struct for derived results
+	struct derivedfc  scalar d         		// Nested struct for derived results
 }
 
-struct derived { 
+struct derivedfc { 
 	string matrix   pathcoefs        		// Selected path coefficients
 	string matrix   intercepts       		// Selected intercept parameters
 	string matrix   beta_bag         		// Endogenous-to-endogenous path coefs
@@ -263,7 +263,7 @@ struct derived {
 }
 
 // Initialize the derived structure with empty matrices and a new anchorkey asarray
-void initialize_objects(struct derived scalar d)
+void initialize_objects(struct derivedfc scalar d)
 {
 	d.pathcoefs = J(0,0,"") 
 	d.intercepts = J(0,0,"") 
@@ -286,7 +286,7 @@ void initialize_objects(struct derived scalar d)
 
 struct derived main(lxvars,lyvars,oyvars,params,params_real,glvls,cmdline,comparegroups)
 {
-    struct myproblem scalar pr
+    struct myproblemfc scalar pr
     initialize_objects(pr.d)
 	
 	// Store Inputs 
@@ -331,7 +331,7 @@ struct derived main(lxvars,lyvars,oyvars,params,params_real,glvls,cmdline,compar
 // ---------------------------------------------------------------------------//
 
 // get_coefficients: Extracts path coefficients and intercepts from the raw params
-void get_coefficients(struct myproblem scalar pr)
+void get_coefficients(struct myproblemfc scalar pr)
 {
     real   matrix  s1, s2a, s2b, s3a, s3b
 	string matrix  params2, params3
@@ -351,7 +351,7 @@ void get_coefficients(struct myproblem scalar pr)
     pr.d.pathcoefs  = select(params3, s3a)
     pr.d.intercepts = select(params3, s3b)
 }
-void get_anchorkey(struct myproblem scalar pr)
+void get_anchorkey(struct myproblemfc scalar pr)
 {
     real   matrix  s1
     real   scalar pos,i,j
@@ -388,7 +388,7 @@ void get_anchorkey(struct myproblem scalar pr)
     }
 }
 // group_pathcoefs: Separate structural coefficients (beta, gamma) from loadings (lambda)
-void group_pathcoefs(struct myproblem scalar pr)
+void group_pathcoefs(struct myproblemfc scalar pr)
 {
     real   matrix res,s1,s1a,s1b,s2,s2a,s2b
     real   scalar i 
@@ -422,7 +422,7 @@ void group_pathcoefs(struct myproblem scalar pr)
 	}
 }
 // group_intercepts: Organize intercept parameters into y and x vectors 
-void group_intercepts(struct myproblem scalar pr)
+void group_intercepts(struct myproblemfc scalar pr)
 {
     real   matrix pos1,pos2,s1,s2,res
     string matrix ys,xs,upsilon_y,upsilon_x
@@ -448,7 +448,7 @@ void group_intercepts(struct myproblem scalar pr)
 // ---------------------------------------------------------------------------//
 // Code to create symbolic parameter matrices to estimate total effects 
 // ---------------------------------------------------------------------------//
-void get_latent_means(struct myproblem scalar pr) 
+void get_latent_means(struct myproblemfc scalar pr) 
 {
 	string matrix x_anchors,y_anchors,check,intercepts,kappa,alpha 
 	real matrix s 
@@ -486,7 +486,7 @@ void get_latent_means(struct myproblem scalar pr)
 		asarray(pr.d.parammatrices_string,"alpha",alpha)
 	}
 }
-void get_Lambdax(struct myproblem scalar pr) 
+void get_Lambdax(struct myproblemfc scalar pr) 
 {
 	real matrix   B, pos,s
 	real scalar   i,j,k
@@ -516,7 +516,7 @@ void get_Lambdax(struct myproblem scalar pr)
 	asarray(pr.d.parammatrices_string,"Lambdax1",select(Lambdax1,s))
 	asarray(pr.d.parammatrices_string,"Lambdax2",select(Lambdax2,s))
 }
-void get_Lambday(struct myproblem scalar pr) 
+void get_Lambday(struct myproblemfc scalar pr) 
 {
 	real matrix   B, pos,s
 	real scalar   i,j,k
@@ -546,7 +546,7 @@ void get_Lambday(struct myproblem scalar pr)
 	asarray(pr.d.parammatrices_string,"Lambday1",select(Lambday1,s))
 	asarray(pr.d.parammatrices_string,"Lambday2",select(Lambday2,s))
 }
-void get_Beta(struct myproblem scalar pr) 
+void get_Beta(struct myproblemfc scalar pr) 
 {
 	real matrix B 
 	real scalar i,j,k
@@ -570,7 +570,7 @@ void get_Beta(struct myproblem scalar pr)
 	asarray(pr.d.parammatrices_string,"Beta1",Beta1)
 	asarray(pr.d.parammatrices_string,"Beta2",Beta2)
 }
-void get_Gamma(struct myproblem scalar pr) 
+void get_Gamma(struct myproblemfc scalar pr) 
 {
 	real matrix B 
 	real scalar i,j,k
@@ -596,7 +596,7 @@ void get_Gamma(struct myproblem scalar pr)
 // ---------------------------------------------------------------------------//
 // Code to fill symbolic parameter matrices to estimate total effects 
 // ---------------------------------------------------------------------------//
-void fill_pathcoef_matrices(struct myproblem scalar pr)
+void fill_pathcoef_matrices(struct myproblemfc scalar pr)
 {
 	string matrix tempmat
 	real matrix result
@@ -624,7 +624,7 @@ void fill_pathcoef_matrices(struct myproblem scalar pr)
 		asarray(pr.d.parammatrices_real,key,result)
 	}
 }
-void fill_intercepts(struct myproblem scalar pr)
+void fill_intercepts(struct myproblemfc scalar pr)
 {
 	string matrix tempmat
 	real matrix result
@@ -656,7 +656,7 @@ void fill_intercepts(struct myproblem scalar pr)
 //----------------------------------------------------------------------------//
 // Calculate Effects
 //----------------------------------------------------------------------------//
-void observed_effects(struct myproblem scalar pr)
+void observed_effects(struct myproblemfc scalar pr)
 {
 	real matrix tempmat,result,effects 	
 	string scalar key
@@ -669,7 +669,7 @@ void observed_effects(struct myproblem scalar pr)
 		asarray(pr.d.observed_effects,key,result)
 	}
 }
-void mi_effects_xonxi(struct myproblem scalar pr)
+void mi_effects_xonxi(struct myproblemfc scalar pr)
 {
 	real matrix kappa1,kappa2,Lambdax1,Lambdax2,result,effects 	
 	
@@ -685,7 +685,7 @@ void mi_effects_xonxi(struct myproblem scalar pr)
 	 
 	 asarray(pr.d.mi_effects,"mi_effects_xonxi",effects)
 }
-void mi_effects_yonxi(struct myproblem scalar pr)
+void mi_effects_yonxi(struct myproblemfc scalar pr)
 {
 	real matrix kappa1,kappa2,Lambday1,Lambday2,
 	            Beta1,Beta2,Gamma1,Gamma2,result, effects 	
@@ -706,7 +706,7 @@ void mi_effects_yonxi(struct myproblem scalar pr)
 	
 	asarray(pr.d.mi_effects,"mi_effects_yonxi",effects)
 }
-void mi_effects_yoneta(struct myproblem scalar pr)
+void mi_effects_yoneta(struct myproblemfc scalar pr)
 {
 	real matrix kappa1,kappa2, alpha1,alpha2,Lambday1,Lambday2,
 	            Beta1,Beta2,Gamma1,Gamma2,result,effects 	 	
@@ -729,7 +729,7 @@ void mi_effects_yoneta(struct myproblem scalar pr)
 	
 	asarray(pr.d.mi_effects,"mi_effects_yoneta",effects)
 }
-void mi_effects_yonxieta(struct myproblem scalar pr)
+void mi_effects_yonxieta(struct myproblemfc scalar pr)
 {
 	real matrix alpha1,alpha2,Lambday1,Lambday2,result, effects 	 	
 	Lambday1 = asarray(pr.d.parammatrices_real,"Lambday1")
