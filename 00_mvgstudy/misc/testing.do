@@ -14,8 +14,12 @@ qui frame designmatrix : sort randnum
 qui frame designmatrix : gen n = _n
 qui frame designmatrix : keep if n < 800
 qui frame designmatrix : manova y = a c b 
-
 qui frame designmatrix : fvexpand a##b##c
+
+
+
+
+
 return list
 
 mkmat i.a##i.b##i.c, matrix(X)

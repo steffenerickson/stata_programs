@@ -1,8 +1,7 @@
 
-* ---------------------------------------------------------------------------- * 
-*! Multivariate Generalizability Study Decompostion Command
-*! With some post estimation-mata functions that allow you to 
-*! calculate confidence intervals and some G-theory coefficients (like relative profile variance)
+//----------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+*! Multivariate Generalizability and Decision Study Decompostion Commands
 
 
 //----------------------------------------------------------------------------//
@@ -642,13 +641,150 @@ real vector mvgstudy:: extract_bracket_numbers(string scalar s)
     return(results)
 }
 
-
 // (3) Profile Variances 
 
+end 
+
+//----------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+// Conditional Standard Errors of measurement program 
+//----------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+	
+program conditionalsem , rclass
+
+	syntax, Variables(varlist) Facets(varlist) OBJ(varlist max=1 ) [COMPositeweights(string)]
+
+	tempname tempframe 
+	frame put `facets' `variables' , into(`tempframe')
+	quietly {
+		frame `tempframe' {
+			local pos = strpos("`facets'", "`obj'")
+			tuples `facets' , nopython conditionals(!`pos')
+			forvalues i = 1/`ntuples' {
+				local current `tuple`i''
+				local name : subinstr local current " " "", all
+				egen group_`name' = group(`current')
+				
+				preserve
+					collapse `variables' , by(`obj' group_`name') 
+					mata X = st_data(.,("`obj'","`variables'"))
+				restore 
+				
+				if "`compositeweights'" != "" {
+					mata st_matrix("`name'",composite_sem(X,st_matrix("`compositeweights'")))
+					preserve
+						clear 
+						svmat `name'
+						local variances
+						rename (*) (`obj' comp_`name'_variance)
+						tempfile data 
+						save `data'
+					restore 
+				}
+				else {
+					if (`:word count `variables'' == 1) mata st_matrix("`name'",univariate_sem(X))
+					else mata st_matrix("`name'",multivariate_sem(X))
+					preserve
+						clear 
+						svmat `name'
+						local variances
+						foreach var of local variables {
+							local temp `var'_`name'_variance
+							local variances : list variances | temp
+						}
+						rename (*) (`obj' `variances')
+						tempfile data 
+						save `data'
+					restore 
+				}
+				
+				merge m:1 `obj' using `data' 
+				drop _merge
+				
+			}
+			if "`compositeweights'" != "" {
+				foreach var of local variables  {
+					egen `var'_mean = mean(`var') , by(`obj')
+				}
+				
+				local rhs 
+				forvalues i = 1/`:rowsof(`compositeweights')/' {
+					local var `:word `i' of `variables''
+					local w = `compositeweights'[`i',1]
+					local term "+`w'*`var'_mean" 
+					local rhs : list rhs |term 
+				}
+				local rhs : subinstr local  rhs "+" ""		
+				gen comp_mean = `rhs'
+		
+				tempvar temp
+				egen `temp' = rowmean(comp_*_variance) 
+				gen comp_abs = sqrt(`temp')
+				collapse comp_mean comp_abs , by (`obj')
+			}
+			else {
+				foreach var of local variables  {
+					tempvar temp
+					egen `var'_mean = mean(`var') , by(`obj')
+					egen `temp' = rowmean(`var'_*_variance) 
+					gen `var'_abs = sqrt(`temp')
+				}
+				collapse *mean *abs , by(`obj')
+			}
+			mkmat *mean *abs , matrix(result) rownames(`obj')
+		}
+	}
+	return matrix result = result
+	
+end 
+
+mata 
+
+real matrix composite_sem(real matrix X, real colvector w)
+{
+	real matrix info,res,subX
+	real scalar i, compvariance
+
+	info = panelsetup(X, 1)
+	res = J(0,2,.)
+	for (i=1; i<=rows(info); i++) {
+		subX = panelsubmatrix(X, i, info)
+		compvariance = (w' * variance(subX[.,2..cols(subX)]) * w)/ rows(subX)
+		res = res \ (subX[1,1], compvariance)
+	}
+	return(res)
+}
+real matrix multivariate_sem(real matrix X)
+{
+	real matrix info,res,subX,variances
+	real scalar i 
+	
+	info = panelsetup(X, 1)
+	res = J(0,cols(X),.)
+	for (i=1; i<=rows(info); i++) {
+		subX = panelsubmatrix(X, i, info)
+		variances = (diagonal(variance(subX[.,2..cols(subX)])):/rows(subX))'
+		res = res \ (subX[1,1], variances)
+	}
+	return(res)
+}
+real matrix univariate_sem(real matrix X)
+{
+	real matrix info,res,subX
+	real scalar i, variance
+	
+	info = panelsetup(X, 1)
+	res = J(0,2,.)
+	for (i=1; i<=rows(info); i++) {
+		subX = panelsubmatrix(X, i, info)
+		variance = variance(subX[.,2]) / rows(subX)
+		res = res \ (subX[1,1], variance)
+	}
+	return(res)
+}
 
 end 
-	
-	
 	
 	
 
